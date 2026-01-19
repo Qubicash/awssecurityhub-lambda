@@ -5,13 +5,14 @@
     "Parameters": {
       "EmailAddress" : {
         "Description" : "Email Address for Subscriber to Security Hub Full Report.",
+        "Default" : "con_ssable@corcept.com",
         "Type" : "String",
         "AllowedPattern" : "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
         "ConstraintDescription" : "Must be a valid Email Address."
       },
       "RecurringScheduleCron": {
           "Description": "Cron expression for scheduling the Security Hub Full Report email. Default: Every Monday 8:00 AM GMT. Example: Every Friday 9:00 AM GMT: cron(0 9 ? * 6 *)",
-          "Default": "cron(0 8 ? * 2 *)",
+          "Default": "cron(0 20 ? * 2 *)",
           "Type": "String"
       },
       "SecurityHubRegion": {
@@ -269,7 +270,11 @@
                     "               'Comparison':'EQUALS',",
                     "               'Value': 'ACTIVE'",
                     "            }",
-                    "        ]",                      
+                    "        ]", 
+                    "        'SeverityLabel':  [",
+                    "            {'Comparison': 'EQUALS', 'Value': 'CRITICAL'},",
+                    "            {'Comparison': 'EQUALS', 'Value': 'HIGH'}",
+                    "        ]",
                     "    },",
                     "    SortCriteria=[",
                     "            {",
