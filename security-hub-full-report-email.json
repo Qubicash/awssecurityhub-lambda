@@ -1,70 +1,91 @@
+
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Security Hub Recurring Full Report. Sends email notifications with the security findings. This template creates Security Hub Full Report Lambda function for delivery, SNS Topic, and needed IAM roles.",
-    "Metadata": {"License": "Copyright 2023 Amazon Web Services, Inc. or its affiliates. All Rights Reserved. Licensed under MIT-0.  This file is distributed on an AS IS BASIS, WITHOUT WARRANTIES"},
-    "Parameters": {
-      "EmailAddress" : {
-        "Description" : "Email Address for Subscriber to Security Hub Full Report.",
-        "Default" : "con_ssable@corcept.com",
-        "Type" : "String",
-        "AllowedPattern" : "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
-        "ConstraintDescription" : "Must be a valid Email Address."
-      },
-      "RecurringScheduleCron": {
-          "Description": "Cron expression for scheduling the Security Hub Full Report email. Default: Every Monday 8:00 AM GMT. Example: Every Friday 9:00 AM GMT: cron(0 9 ? * 6 *)",
-          "Default": "cron(0 20 ? * 2 *)",
-          "Type": "String"
-      },
-      "SecurityHubRegion": {
-          "Description": "Aggregation region for Security Hub",
-          "Default": "us-west-2",
-          "Type": "String"
-      }
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Security Hub Recurring Full Report. Sends email notifications with the security findings. This template creates Security Hub Full Report Lambda function for delivery, SNS Topic, and needed IAM roles.",
+  "Metadata": {
+    "License": "Copyright 2023 Amazon Web Services, Inc. or its affiliates. All Rights Reserved. Licensed under MIT-0.  This file is distributed on an AS IS BASIS, WITHOUT WARRANTIES"
+  },
+  "Parameters": {
+    "EmailAddress": {
+      "Description": "Email Address for Subscriber to Security Hub Full Report.",
+      "Default": "con_ssable@corcept.com",
+      "Type": "String",
+      "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+      "ConstraintDescription": "Must be a valid Email Address."
     },
-    "Resources" : {
-      "S3BucketName":{
-        "Type": "AWS::S3::Bucket",
-        "DeletionPolicy": "Retain",
-        "Metadata": {
-          "cfn_nag":{
-            "rules_to_suppress":[
+    "RecurringScheduleCron": {
+      "Description": "Cron expression for scheduling the Security Hub Full Report email. Default: Every Monday 8:00 AM GMT. Example: Every Friday 9:00 AM GMT: cron(0 9 ? * 6 *)",
+      "Default": "cron(0 20 ? * 2 *)",
+      "Type": "String"
+    },
+    "SecurityHubRegion": {
+      "Description": "Aggregation region for Security Hub",
+      "Default": "us-west-2",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "S3BucketName": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cfn_nag": {
+          "rules_to_suppress": [
             {
               "id": "W35",
               "reason": "Can't resolve without creating a depedency with other S3 Bucket"
             }
-            ]
-          }
-        },
-        "Properties": {
-          "BucketEncryption": {
-            "ServerSideEncryptionConfiguration": [
-              {
-                "ServerSideEncryptionByDefault": {
-                  "SSEAlgorithm": "AES256"
-                }
-              }
-            ]
-          },
-          "LifecycleConfiguration":{
-            "Rules":[
-              {
-                "Id": "RetentionPolicy",
-                "Status": "Enabled",
-                "NoncurrentVersionExpirationInDays": "3650",
-                "AbortIncompleteMultipartUpload":{
-                  "DaysAfterInitiation": "3"
-                }
-              }
-            ]
-          }
+          ]
         }
       },
-      "SecurityHubFindingsLogBucketPolicy": {
-        "Type": "AWS::S3::BucketPolicy",
-        "Properties": {
-          "Bucket": {"Ref": "S3BucketName"},
-          "PolicyDocument": {
-            "Statement": [
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "RetentionPolicy",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 3650,
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SecurityHubFindingsLogBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "S3BucketName"
+        },
+        "PolicyDocument": {
+          "Statement": [
             {
               "Sid": "DenyUnEncryptedObjectUploads",
               "Effect": "Deny",
@@ -101,7 +122,7 @@
                       "arn:aws:s3:::",
                       {
                         "Ref": "S3BucketName"
-                      }                      
+                      }
                     ]
                   ]
                 },
@@ -113,7 +134,7 @@
                       {
                         "Ref": "S3BucketName"
                       },
-                      "/*"                    
+                      "/*"
                     ]
                   ]
                 }
@@ -124,267 +145,337 @@
                 }
               }
             }
-            ]
-          }
+          ]
         }
-      },
-      "SecurityHubRecurringFullReportSNSTopic": {
-          "Type": "AWS::SNS::Topic",
-          "Properties": {
-            "TopicName" : "SecurityHubRecurringFullReport",
-            "DisplayName" : "Security Hub Full Report",
-            "KmsMasterKeyId": "alias/aws/sns",
-            "Subscription" : [{
-                "Endpoint" : { "Ref" : "EmailAddress" },
-                "Protocol" : "email"
-              }]
+      }
+    },
+    "SecurityHubRecurringFullReportSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "SecurityHubRecurringFullReport",
+        "DisplayName": "Security Hub Full Report",
+        "KmsMasterKeyId": "alias/aws/sns",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "EmailAddress"
+            },
+            "Protocol": "email"
           }
+        ]
+      }
+    },
+    "SecurityHubFullReportEmailSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "SecurityHubFullReportEmailSchedule",
+        "Description": "Triggers the Recurring Security Hub Full Report email",
+        "ScheduleExpression": {
+          "Ref": "RecurringScheduleCron"
         },
-      "SecurityHubFullReportEmailSchedule": {
-            "Properties": {
-                "Name": "SecurityHubFullReportEmailSchedule",
-                "Description": "Triggers the Recurring Security Hub Full Report email",
-                "ScheduleExpression": {"Ref": "RecurringScheduleCron"},
-                "Targets": [
-                    {
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "SendSecurityHubFullReportEmailLambda",
-                                "Arn"
-                            ]
-                        },
-                        "Id": "1"
-                    }
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "SendSecurityHubFullReportEmailLambda",
+                "Arn"
+              ]
+            },
+            "Id": "1"
+          }
+        ]
+      }
+    },
+    "CloudWatchSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "SendSecurityHubFullReportEmailLambda",
+            "Arn"
+          ]
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "SecurityHubFullReportEmailSchedule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "MaxSessionDuration": "43200",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
                 ]
-            },
-            "Type": "AWS::Events::Rule"
-        },
-      "CloudWatchSchedulePermission": {
-            "Properties": {
-                "Action": "lambda:InvokeFunction",
-                "FunctionName": {
-                    "Fn::GetAtt": [
-                        "SendSecurityHubFullReportEmailLambda",
-                        "Arn"
-                    ]
-                },
-                "Principal": "events.amazonaws.com",
-                "SourceArn": {
-                    "Fn::GetAtt": [
-                        "SecurityHubFullReportEmailSchedule",
-                        "Arn"
-                    ]
-                }
-            },
-            "Type": "AWS::Lambda::Permission"
-        },
-      "LambdaExecutionRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-              "MaxSessionDuration" : "43200",
-              "AssumeRolePolicyDocument": {
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": ["lambda.amazonaws.com"]},
-                    "Action": ["sts:AssumeRole"]
-                }]
               },
-               "Policies": [{
-                  "PolicyName": "SecurityHubFullReport",
-                  "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [{
-                      "Effect": "Allow",
-                      "Action": ["logs:CreateLogGroup",
-                                 "logs:CreateLogStream",
-                                 "logs:PutLogEvents"],
-                      "Resource": "arn:aws:logs:*:*:*"
-                    },
-                    {
-                      "Effect": "Allow",
-                      "Action": ["securityhub:Get*","securityhub:List*"],
-                      "Resource": { "Fn::Sub" : "arn:*:securityhub:*:${AWS::AccountId}:hub/default" }
-                    },
-                    {
-                      "Effect": "Allow",
-                      "Action": "sns:Publish",
-                      "Resource": {"Ref": "SecurityHubRecurringFullReportSNSTopic"}
-                    },
-                    {
-                      "Effect": "Allow",
-                      "Action": ["s3:PutObject",
-                                 "s3:GetObject",
-                                 "s3:PutObjectAcl"],
-                      "Resource": {"Fn::Join": [ "",[ "arn:aws:s3:::",{"Ref": "S3BucketName"},"/*"]]}
-                    }
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "SecurityHubFullReport",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "securityhub:Get*",
+                    "securityhub:List*",
+                    "securityhub:Describe*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sns:Publish",
+                  "Resource": {
+                    "Ref": "SecurityHubRecurringFullReportSNSTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:::",
+                        {
+                          "Ref": "S3BucketName"
+                        },
+                        "/*"
+                      ]
                     ]
                   }
-              }]
+                }
+              ]
             }
-        },
-      "SendSecurityHubFullReportEmailLambda": {
-        "Type": "AWS::Lambda::Function",
-        "Metadata": {
-          "cfn_nag":{
-            "rules_to_suppress":[
+          }
+        ]
+      }
+    },
+    "LambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/SendSecurityHubFullReportEmail",
+        "RetentionInDays": 30
+      }
+    },
+    "SendSecurityHubFullReportEmailLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Metadata": {
+        "cfn_nag": {
+          "rules_to_suppress": [
             {
               "id": "W89",
               "reason": "Traffic between Lambda and S3 is encrypted."
             }
+          ]
+        }
+      },
+      "Properties": {
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import boto3",
+                "import json, os, io, csv",
+                "from datetime import datetime",
+                "",
+                "REGION = os.environ.get('region') or os.environ.get('AWS_REGION')",
+                "BUCKET = os.environ['bucket']",
+                "SNS_TOPIC_ARN = os.environ['SNSTopic']",
+                "",
+                "FILENAME = 'findings.csv'",
+                "UTC_DATE = datetime.utcnow().strftime('%Y%m%d')",
+                "S3_PREFIX = f\"{UTC_DATE}/\"",
+                "TMP_PATH = f\"/tmp/{FILENAME}\"",
+                "",
+                "MAX_ROWS = int(os.environ.get('MAX_ROWS', '50000'))",
+                "SAFETY_SECONDS = int(os.environ.get('SAFETY_SECONDS', '90'))",
+                "",
+                "def get_remaining_time_seconds(context):",
+                "    try:",
+                "        return context.get_remaining_time_in_millis() / 1000.0",
+                "    except Exception:",
+                "        return 300.0",
+                "",
+                "def get_securityhub_findings(region):",
+                "    client = boto3.client('securityhub', region_name=region)",
+                "    paginator = client.get_paginator('get_findings')",
+                "    page_iterator = paginator.paginate(",
+                "        Filters={",
+                "            'WorkflowStatus': [{'Comparison': 'EQUALS', 'Value': 'NEW'}],",
+                "            'RecordState':    [{'Comparison': 'EQUALS', 'Value': 'ACTIVE'}],",
+                "            'SeverityLabel':  [",
+                "                {'Comparison': 'EQUALS', 'Value': 'CRITICAL'},",
+                "                {'Comparison': 'EQUALS', 'Value': 'HIGH'}",
+                "            ]",
+                "        },",
+                "        SortCriteria=[{'Field': 'Id', 'SortOrder': 'asc'}],",
+                "        PaginationConfig={'PageSize': 100}",
+                "    )",
+                "    return page_iterator",
+                "",
+                "def findings_to_csv(region, context):",
+                "    pages = get_securityhub_findings(region)",
+                "    output = io.StringIO(newline='')",
+                "    writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)",
+                "",
+                "    header = [",
+                "        'Id','ProductArn','ProductName','CompanyName','GeneratorId','SecurityControlId',",
+                "        'CreatedAt','UpdatedAt','Confidence','Remediation','Remediation_URL','SourceUrl',",
+                "        'Compliance','WorkflowStatus','RecordState','ProcessedAt','Title','Severity',",
+                "        'Region','AccountId','Description','ResourceType','ResourceId','ResourceName',",
+                "        'ResourceTagsJson'",
+                "    ]",
+                "    writer.writerow(header)",
+                "",
+                "    count = 0",
+                "    for page in pages:",
+                "        for f in page.get('Findings', []):",
+                "            if get_remaining_time_seconds(context) <= SAFETY_SECONDS:",
+                "                print(f\"Time budget reached, stopping at {count} rows\")",
+                "                return output.getvalue(), count, True",
+                "",
+                "            fid = f.get('Id', '')",
+                "            product_arn = f.get('ProductArn', '')",
+                "            product_name = f.get('ProductName', '')",
+                "            company_name = f.get('CompanyName', '')",
+                "            generator_id = f.get('GeneratorId', '')",
+                "            sec_control_id = f.get('Compliance', {}).get('SecurityControlId', '')",
+                "            created_at = f.get('CreatedAt', '')",
+                "            updated_at = f.get('UpdatedAt', '')",
+                "            confidence = f.get('Confidence', '')",
+                "            rem_text = f.get('Remediation', {}).get('Recommendation', {}).get('Text', '')",
+                "            rem_url = f.get('Remediation', {}).get('Recommendation', {}).get('Url', '')",
+                "            source_url = f.get('SourceUrl', '')",
+                "            compliance = f.get('Compliance', {}).get('Status', '')",
+                "            workflow_status = f.get('Workflow', {}).get('Status', '')",
+                "            record_state = f.get('RecordState', '')",
+                "            processed_at = f.get('ProcessedAt', '')",
+                "            title = f.get('Title', '')",
+                "            severity = f.get('Severity', {}).get('Label', '')",
+                "            region = f.get('Region', '')",
+                "            account_id = f.get('AwsAccountId', '')",
+                "            description = (f.get('Description', '') or '').replace('\\r',' ').replace('\\n',' ').replace(';',' ').strip()",
+                "",
+                "            r_type = r_id = r_name = ''",
+                "            r_tags_json = '{}' ",
+                "            resources = f.get('Resources', []) or []",
+                "            if resources:",
+                "                r0 = resources[0] or {}",
+                "                r_type = r0.get('Type','')",
+                "                r_id = r0.get('Id','')",
+                "                tags = r0.get('Tags', {}) or {}",
+                "                if isinstance(tags, dict):",
+                "                    r_name = tags.get('Name','')",
+                "                r_tags_json = json.dumps(tags, separators=(',', ':'))",
+                "",
+                "            writer.writerow([",
+                "                fid, product_arn, product_name, company_name, generator_id, sec_control_id,",
+                "                created_at, updated_at, confidence, rem_text, rem_url, source_url,",
+                "                compliance, workflow_status, record_state, processed_at, title, severity,",
+                "                region, account_id, description, r_type, r_id, r_name, r_tags_json",
+                "            ])",
+                "            count += 1",
+                "            if count >= MAX_ROWS:",
+                "                print(f\"Row cap reached at {count}\")",
+                "                return output.getvalue(), count, True",
+                "",
+                "    return output.getvalue(), count, False",
+                "",
+                "def upload_to_s3(region, bucket_name, key, local_path):",
+                "    s3 = boto3.client('s3', region_name=region)",
+                "    s3.upload_file(local_path, bucket_name, key, ExtraArgs={'ServerSideEncryption':'AES256'})",
+                "",
+                "def create_presigned_url(region, bucket_name, key, expiry_seconds=86400):",
+                "    s3 = boto3.client('s3', region_name=region)",
+                "    return s3.generate_presigned_url('get_object', Params={'Bucket': bucket_name, 'Key': key}, ExpiresIn=expiry_seconds)",
+                "",
+                "def publish_sns(url, count, partial):",
+                "    state = 'PARTIAL' if partial else 'FULL'",
+                "    body = f\"[{state}] Download AWS Security Hub Findings report (records: {count}):\\n{url}\"",
+                "    sns = boto3.client('sns', region_name=REGION)",
+                "    sns.publish(TopicArn=SNS_TOPIC_ARN, Message=body, Subject=f\"Security Hub Full Report ({state})\")",
+                "",
+                "def lambda_handler(event, context):",
+                "    csv_str, count, partial = findings_to_csv(REGION, context)",
+                "    with open(TMP_PATH, 'w', newline='') as f:",
+                "        f.write(csv_str)",
+                "    s3_key = f\"{S3_PREFIX}{FILENAME}\"",
+                "    upload_to_s3(REGION, BUCKET, s3_key, TMP_PATH)",
+                "    try:",
+                "        os.remove(TMP_PATH)",
+                "    except Exception:",
+                "        pass",
+                "    url = create_presigned_url(REGION, BUCKET, s3_key)",
+                "    publish_sns(url, count, partial)",
+                "    return {'statusCode': 200, 'body': json.dumps({'records': count, 'partial': partial, 'url': url})}"
+              ]
             ]
           }
         },
-        "Properties": {
-            "Code": {
-              "ZipFile": {
-                "Fn::Join": [
-                  "\n",
-                  [
-                    "import boto3, json, os",
-                    "from datetime import datetime",
-                    "region = os.environ['region']",
-                    "bucket = os.environ['bucket']",
-                    "snsTopicArn = os.environ['SNSTopic']",
-                    "csv = ';'",
-                    "filename = 'findings.csv'",
-                    "utcDate = datetime.utcnow().strftime('%Y%m%d')",
-                    "s3Path = utcDate + '/'",
-                    "fullpath = '/tmp/' + filename",
-                    " ",
-                    "def get_securityhub_findings(region):",
-                    "    print('get_securityhub_findings STARTED')",
-                    "    client = boto3.client('securityhub', region_name=region)",
-                    "    paginator = client.get_paginator('get_findings')",
-                    "    findings=[]",
-                    "    page_iterator = paginator.paginate(",
-                    "    Filters={",
-                    "        'WorkflowStatus': [",
-                    "           {",
-                    "               'Comparison':'EQUALS',",
-                    "               'Value': 'NEW'",
-                    "            }",
-                    "        ],",
-                    "        'RecordState': [",
-                    "           {",
-                    "               'Comparison':'EQUALS',",
-                    "               'Value': 'ACTIVE'",
-                    "            }",
-                    "        ]", 
-                    "        'SeverityLabel':  [",
-                    "            {'Comparison': 'EQUALS', 'Value': 'CRITICAL'},",
-                    "            {'Comparison': 'EQUALS', 'Value': 'HIGH'}",
-                    "        ]",
-                    "    },",
-                    "    SortCriteria=[",
-                    "            {",
-                    "                'Field': 'Id',",
-                    "                'SortOrder': 'asc'",
-                    "            },",
-                    "        ],",
-                    "    MaxResults=10",
-                    "    )",
-                    "    return page_iterator",                          
-                    " ",
-                    "def get_securityhub_findings2csv(region):",
-                    "    findings_pages = get_securityhub_findings(region)",
-                    "    findings_csv = ''",
-                    "    lines = 0",
-                    "    #print('get_securityhub_findings2csv STARTED')",
-                    "    #Adds Findings Title",
-                    "    findings_csv = f'Id{csv}ProductArn{csv}ProductName{csv}CompanyName{csv}GeneratorId{csv}SecurityControlId{csv}CreatedAt{csv}UpdatedAt{csv}Confidence{csv}Remediation{csv}Remediation_URL{csv}SourceUrl{csv}Compliance{csv}WorkflowStatus{csv}RecordState{csv}ProcessedAt{csv}Title{csv}severity{csv}Region{csv}Account_id{csv}Description{csv}Resource_type{csv}Resource_id{csv}Resource_name{csv}Resource_tags' + os.linesep",
-                    "    #Adds Findings Details",
-                    "    for page in findings_pages:",
-                    "        for finding in page['Findings']:",
-                    "            finding_id = finding.get('Id','')",
-                    "            finding_ProductArn = finding.get('ProductArn','')",
-                    "            finding_ProductName = finding.get('ProductName','')",
-                    "            finding_CompanyName = finding.get('CompanyName','')",
-                    "            finding_GeneratorId = finding.get('GeneratorId','')",
-                    "            finding_SecurityControlId = finding.get('Compliance',{}).get('SecurityControlId','')",
-                    "            finding_CreatedAt = finding.get('CreatedAt','')",
-                    "            finding_UpdatedAt = finding.get('UpdatedAt','')",
-                    "            finding_Confidence = finding.get('Confidence','')",
-                    "            finding_RemText = finding.get('Remediation',{}).get('Recommendation',{}).get('Text','')",
-                    "            finding_RemUrl =  finding.get('Remediation',{}).get('Recommendation',{}).get('Url','')",
-                    "            finding_SourceUrl = finding.get('SourceUrl','')",
-                    "            finding_Compliance = finding.get('Compliance',{}).get('Status','')",
-                    "            finding_WorkflowStatus = finding.get('Workflow',{}).get('Status','')",
-                    "            finding_RecordState = finding.get('RecordState','')",
-                    "            finding_Processed_at = finding.get('ProcessedAt','')",
-                    "            finding_title = finding.get('Title','')",
-                    "            finding_severity = finding.get('Severity',{}).get('Label','')",
-                    "            finding_region = finding.get('Region','')",
-                    "            finding_account_id = finding.get('AwsAccountId','')",
-                    "            finding_description = finding.get('Description','').replace(';','.')",
-                    "            finding_description = ''.join(finding_description.splitlines())",
-                    "            finding_resource_type = finding.get('Resources',{})[0].get('Type','')",
-                    "            finding_resource_id = finding.get('Resources',{})[0].get('Id','')",
-                    "            finding_resource_name = finding.get('Resources',{})[0].get('Tags',{}).get('Name','')",
-                    "            finding_resource_tags = finding.get('Resources',{})[0].get('Tags','')",                      
-                    "            finding_csv = f'{finding_id}{csv}{finding_ProductArn}{csv}{finding_ProductName}{csv}{finding_CompanyName}{csv}{finding_GeneratorId}{csv}{finding_SecurityControlId}{csv}{finding_CreatedAt}{csv}{finding_UpdatedAt}{csv}{finding_Confidence}{csv}{finding_RemText}{csv}{finding_RemUrl}{csv}{finding_SourceUrl}{csv}{finding_Compliance}{csv}{finding_WorkflowStatus}{csv}{finding_RecordState}{csv}{finding_Processed_at}{csv}{finding_title}{csv}{finding_severity}{csv}{finding_region}{csv}{finding_account_id}{csv}{finding_description}{csv}{finding_resource_type}{csv}{finding_resource_id}{csv}{finding_resource_name}{csv}{finding_resource_tags}'+ os.linesep",
-                    "            findings_csv += finding_csv",
-                    "            lines = lines + 1",
-                    "    print('lines:' + str(lines))",
-                    "    return findings_csv",
-                    " ",
-                    "def copy_file_to_s3(region, bucket_name, filename):",
-                    "    s3 = boto3.client('s3', region_name=region)",
-                    "    tc = boto3.s3.transfer.S3Transfer(client=s3)",
-                    "    tc.upload_file(fullpath, bucket_name, s3Path + filename,extra_args={'ServerSideEncryption':'AES256'})",
-                    "    os.remove(fullpath)",
-                    " ",    
-                    "def collection_to_csv(col, filename):",
-                    "    with open(filename, 'w') as f:",
-                    "        f.write(col)",
-                    " ",
-                    "def create_s3_preauth_url(region, bucket_name, file_name):",
-                    "    s3 = boto3.client('s3', region_name=region)",
-                    "    presigned_url = s3.generate_presigned_url('get_object', Params={'Bucket': bucket_name, 'Key': s3Path + file_name}, ExpiresIn=86400)",
-                    "    print(presigned_url)",
-                    "    return presigned_url",
-                    " ",    
-                    "def send_sns(url):",
-                    "    snsBody = 'Download AWS Security Hub Findings full report: '",
-                    "    snsBody += url",                    
-                    "    sns_client = boto3.client('sns')",
-                    "    response = sns_client.publish(TopicArn=snsTopicArn, Message=snsBody)",
-                    " ",
-                    "def lambda_handler(event, context):",
-                    "    csv = get_securityhub_findings2csv (region)",
-                    "    collection_to_csv(csv,fullpath)",
-                    "    copy_file_to_s3 (region,bucket,filename)",
-                    "    url=create_s3_preauth_url(region, bucket, filename)",
-                    "    send_sns(url)",
-                    "    return {",
-                    "        'statusCode': 200,",
-                    "        'body': json.dumps('Report: ' + url)",
-                    "    }"
-                  ]
-                ]                
-              }
+        "FunctionName": "SendSecurityHubFullReportEmail",
+        "Handler": "index.lambda_handler",
+        "Runtime": "python3.11",
+        "Timeout": 900,
+        "MemorySize": 1536,
+        "ReservedConcurrentExecutions": 2,
+        "Architectures": [
+          "arm64"
+        ],
+        "Tags": [],
+        "Environment": {
+          "Variables": {
+            "SNSTopic": {
+              "Ref": "SecurityHubRecurringFullReportSNSTopic"
             },
-            "FunctionName":"SendSecurityHubFullReportEmail",
-            "Handler":"index.lambda_handler",
-            "Runtime": "python3.11",
-            "Timeout": "900",
-            "ReservedConcurrentExecutions": 2,
-            "Architectures": ["arm64"],
-            "Tags":[],
-            "Environment": {
-              "Variables" : {
-                  "SNSTopic": {"Ref": "SecurityHubRecurringFullReportSNSTopic"},
-                  "bucket": {"Ref": "S3BucketName"},
-                  "region": {"Ref": "SecurityHubRegion"}
-              }
+            "bucket": {
+              "Ref": "S3BucketName"
             },
-            "Role": {
-                "Fn::GetAtt": [
-                    "LambdaExecutionRole",
-                    "Arn"
-                ]
-            }
+            "region": {
+              "Ref": "SecurityHubRegion"
+            },
+            "MAX_ROWS": "50000",
+            "SAFETY_SECONDS": "90"
+          }
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         }
       }
+    }
   }
 }
